@@ -4,81 +4,13 @@
  * main functions or somesuch
  */
 
-/*
- * important externals (probably want a separate header for these)
- */
-
-void init_resources(void);
+#include "stand.h"
 
 /*
  * experiments area
  */
 
 #include "mactraps.h"
-
-struct qd_globs our_qd_globs;
-GrafPort our_grafport;
-Rect our_scrollrect;
-Point our_newline_point;
-s16 our_linewrap_position;
-RgnHandle our_region_handle;
-
-void emit_newline(void)
-{
-    ScrollRect(&our_scrollrect, 0, -12, our_region_handle);
-    MoveTo(our_newline_point);
-}
-
-void emit_char(char c)
-{
-    if (c == '\n') {
-	emit_newline();
-    } else {
-	if (our_grafport.penState.pnLoc.h >= our_linewrap_position) {
-	    emit_newline();
-	}
-	DrawChar(c);
-    }
-}
-
-void emit_string(char *s)
-{
-    while (*s) {
-	emit_char(*s++);
-    }
-}
-
-void init_graphics()
-{
-    InitGraph(&our_qd_globs.thePort);
-
-    InitFonts();
-    
-    OpenPort(&our_grafport);
-
-    our_scrollrect.left = (our_grafport.portRect.right >> 1) - 225;
-    our_scrollrect.right = our_scrollrect.left + 450;
-
-    our_scrollrect.top = (our_grafport.portRect.bottom >> 1) - 150;
-    our_scrollrect.bottom = our_scrollrect.top + 300;
-    
-    EraseRect(&our_scrollrect);
-    FrameRect(&our_scrollrect);
-
-    our_newline_point.h = our_scrollrect.left + 4;
-    our_newline_point.v = our_scrollrect.bottom - 4;
-
-    our_linewrap_position = our_scrollrect.right - 12;
-
-    our_scrollrect.top += 10;
-    our_scrollrect.bottom -= 1;
-    our_scrollrect.left += 1;
-    our_scrollrect.right -= 1;
-
-    MoveTo(our_newline_point);
-
-    our_region_handle = NewRgn();
-}
 
 #define fsFromStart 1
 
@@ -102,13 +34,13 @@ struct ParamBlockRec {
     u32 ioActCount;
     s16 ioPosMode;
     s32 ioPosOffset;
-};
+} __attribute__ ((packed));
 
 extern inline OSErr PBRead(struct ParamBlockRec *paramblock)
 {
     OSErr retval;
 
-    asm("movel %1, a0; .word 0xa002; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
+    asm volatile("movel %1, a0; .word 0xa002; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
 
     return retval;
 }
@@ -117,7 +49,7 @@ extern inline OSErr PBWrite(struct ParamBlockRec *paramblock)
 {
     OSErr retval;
 
-    asm("movel %1, a0; .word 0xa003; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
+    asm volatile("movel %1, a0; .word 0xa003; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
 
     return retval;
 }
@@ -138,11 +70,7 @@ extern inline OSErr PBWrite(struct ParamBlockRec *paramblock)
 				    */
 
 #if 0
-/*
- * FIXME: I had to have this return the return from PBWrite to keep the
- * compiler from "optimizing" it out. If someone could tell me a better way?
- */
-int dump_rom(void)
+void dump_rom(void)
 {
     struct ParamBlockRec paramblock;
     int i;
@@ -161,11 +89,9 @@ int dump_rom(void)
     paramblock.ioPosMode = fsFromStart;
     paramblock.ioPosOffset = 0;
 
-    i = PBWrite(&paramblock);
+    PBWrite(&paramblock);
     
     emit_string("ROM dump completed (hope it worked).\n");
-
-    return i;
 }
 #endif
 
@@ -181,8 +107,8 @@ u8 read_key(void)
 
 void emit_u8(u8 data)
 {
-    emit_char("0123456789abcdef"[data >> 4]);
-    emit_char("0123456789abcdef"[data & 15]);
+    putchar("0123456789abcdef"[data >> 4]);
+    putchar("0123456789abcdef"[data & 15]);
 }
 
 void emit_u16(u16 data)
@@ -197,18 +123,137 @@ void emit_u32(u32 data)
     emit_u16(data);
 }
 
+void cat_file(char *filename)
+{
+    int fd;
+    int i;
+    int j;
+    char buf[128];
+    fd = open(filename, 0);
+    if (fd < 0) {
+	emit_string("file not found.\n");
+	emit_u32(errno);
+	putchar('\n');
+	return;
+    }
+    while((i = read(fd, buf, 128)) > 0) {
+	for (j = 0; j < i; j++) {
+	    putchar(buf[j]);
+	}
+    }
+    close(fd);
+}
+
+/*
+ * "bd" (bios disk) device interface
+ */
+
+#include "ufs.h"
+
+/*  #define XDDEBUG */
+
+static int bdstrategy __P((void *, int, daddr_t, size_t, void *, size_t *));
+static int bdopenclose __P((struct open_file *));
+static int bdioctl __P((struct open_file *, u_long, void *));
+
+static struct devsw devsw[] = {
+        { "bd", bdstrategy, (void *)bdopenclose, (void *)bdopenclose, bdioctl }
+};              
+
+struct fs_ops file_system[] = {
+	{ ufs_open, ufs_close, ufs_read, ufs_write, ufs_seek, ufs_stat },
+};
+
+int nfsys = sizeof(file_system)/sizeof(struct fs_ops);
+
+int devopen(struct open_file *f, const char *fname, char **file)
+{
+	f->f_devdata = 0;
+	f->f_dev = &devsw[0];
+	*file = (char *)fname;
+	return 0;
+}
+static int
+bdstrategy (devd, flag, dblk, size, buf, rsize)
+	void	*devd;
+	int     flag;
+	daddr_t dblk;
+	size_t  size;
+	void    *buf;
+	size_t  *rsize; 
+{
+    struct ParamBlockRec paramblock;
+
+    if (flag != F_READ)
+	return EIO;
+
+    paramblock.ioVRefNum = BootDrive;
+    paramblock.ioRefNum = BtDskRfn;
+    paramblock.ioReqCount = size;
+    paramblock.ioPosMode = fsFromStart;
+    paramblock.ioPosOffset = (dblk << 9);
+    paramblock.ioBuffer = buf;
+
+#ifdef XDDEBUG
+    printf("strategy called: %ld(%ld), %ld, 0x%lx\n",
+	   (long)dblk, (long)paramblock.ioPosOffset, (long)size, (unsigned long)buf);
+#endif
+
+    PBRead(&paramblock);
+
+#ifdef XDDEBUG
+    printf("strategy got err %ld, rsize %ld\n", (long)paramblock.ioResult, paramblock.ioActCount);
+#endif
+
+    if (paramblock.ioResult) {
+	*rsize = 0;
+	return EIO;
+    }
+
+    *rsize = paramblock.ioActCount;
+    return 0;
+}
+
+
+/* nothing do do for these: */
+
+static int
+bdopenclose(f)
+	struct open_file *f;
+{
+	return 0;
+}
+
+static int
+bdioctl (f, cmd, data)
+	struct open_file *f;
+	u_long  cmd;
+	void    *data;
+{
+	return EIO;
+}
+
+/*
+ * memory allocation
+ */
+
+void *alloc(unsigned int size)
+{
+    return NewPtr_Sys_Clear(size);
+}
+
+void free(void *ptr, unsigned int foo)
+{
+    DisposPtr(ptr);
+}
+
 /*
  * m^Hpain function
  */
 
 void pain(void)
 {
-    init_resources();
-
-    init_graphics();
-
-/*      SysEvtMask = everyEvent; */
-/*      FlushEvents(everyEvent, 0); */
+    init_console();
 
     emit_string("---===***< Startup >***===---\n");
 #if 0
@@ -216,21 +261,13 @@ void pain(void)
 		"feature of emit_char(). ABCDEFGHIJKLMNOPQRSTUVWXYZ "
 		"abcdefghijklmnopqrstuvwxyz.\n");
 #endif
-    InitEvents(0x20);
-    SysEvtMask = keyDownMask | autoKeyMask;
-    FlushEvents(everyEvent, 0);
-    install_kb_driver();
-/*      InitCursor(); */
-/*      { u16 tmp; asm("movew sr, %0": "=g" (tmp)); emit_u16(tmp); emit_char('\n');} */
-/*      emit_u16(SysEvtMask); */
-/*      emit_char('\n'); */
 
-/*     dump_rom(); */
+/*      cat_file("test.txt"); */
+    cat_file("netbsd");
 
     emit_string("> ");
-/*      while(1); */
     while (1) {
-	emit_char(read_key());
+	putchar(read_key());
     }
 
     while(1);

@@ -19,6 +19,19 @@ extern inline void SysError(u16 code)
     asm volatile("movw %0, d0; .word 0xa9c9": : "g" (code): ASM_REGS_DESTROYED);
 }
 
+extern inline void *NewPtr_Sys_Clear(u32 size)
+{
+    void *retval;
+
+    asm volatile("movel %1, d0; .word 0xa71e; movel a0, %0": "=g" (retval): "g" (size): ASM_REGS_DESTROYED);
+
+    return retval;
+}
+
+extern inline void DisposPtr(void *ptr)
+{
+    asm volatile("movel %0, a0; .word 0xa01f": : "g" (ptr): ASM_REGS_DESTROYED);
+}
 
 /* QuickDraw traps */
 
@@ -64,6 +77,16 @@ extern inline RgnHandle NewRgn(void)
 extern inline void DrawChar(char acter)
 {
     asm volatile("movew %0, sp@-; .word 0xa883": : "g" (acter): ASM_REGS_DESTROYED);
+}
+
+extern inline void TextFont(s16 font)
+{
+    asm volatile("movew %0, sp@-; .word 0xa887": : "g" (font): ASM_REGS_DESTROYED);
+}
+
+extern inline void TextSize(s16 size)
+{
+    asm volatile("movew %0, sp@-; .word 0xa88a": : "g" (size): ASM_REGS_DESTROYED);
 }
 
 extern inline void ScrollRect(Rect *rect, s16 h, s16 v, RgnHandle updateregion)
