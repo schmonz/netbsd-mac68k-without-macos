@@ -1,31 +1,33 @@
 #
 # readme
 #
-# notes on the mac bootsector tests (a combined readme and todo list)
+# notes on the new mac bootstrap code
 #
 
-The tests are explorations of the startup environment of a mac, and as such
-are intended to be written to the start of a floppy disk. They have all been
-run on a IIcx, and notes have been made within each source file as to the
-expected behavior and, optionally, the conclusions drawn therefrom.
+This is, in effect, an almost total rewrite of my previous bootsector work,
+but in C (with the help of some code I found in arch/amiga/stand/bootblock),
+and without the SCSI access code.
 
-To write a test to disk, use "dd if=test.bin of=/dev/fd0 conv=osync". The conv
-parameter is important.
+This version has been set up to write 512k of data starting from RomBase to
+the boot disk. I have been compiling it with -m68000, and using a hex editor
+to change the one occurance of a long branch (dunno why it insists on putting
+one in) to a short branch followed by a NOP, and running it on a Mac Classic.
+Possible uses for this are left to the reader's imagination.
 
-After some preliminary exploration with gcc, I decided that I couldn't trust
-it. Therefore, all these tests and any apps I write will be in ASM. If anyone
-else figures out how to get it to behave, I'll consider working with it.
-
-There's also something here called "mainapp". Right now it consists of some
-routines for a text output box, and displays the names, types, sizes, and
-positions of all the partitions on SCSI 0. If SCSI 0 isn't a disk, or doesn't
-exist, or doesn't have a valid partition map, the behavior is undefined (that
-is, it'll almost definately break). It will also eject the disk from the
-internal drive once it finishes with the partition map (this saves me from
-having to reset the system to get the disk out).
+Install kernels are too big to fit on a floppy disk unless they are compressed.
+Unfortunately, zlib is to big to fit in 8k. The best solution I have been able
+to come up with for this problem is to use a multi-stage system, the first 8k
+stage containing filesystem access routines (libsa?), and the second stage
+being of indeterminate size, and containing libsa, libz, and any interactive
+goodies we can be bothered implementing. While the linker I sto^H^H^Hborrowed
+from arch/amiga is presently limited to an 8k binary, it shouldn't be that
+hard to change it to only enforce that based on a command line switch (famous
+last words). None of this has been implemented yet.
 
 I see no reason to configure an application zone. QuickDraw can be set up on
-the stack, and I put the stack and the A5 world in the system heap.
+the stack, and I put the stack and the A5 world in the system heap. The
+linker and relocator resolve all absolute references, so the only trick is
+keeping the compiler away from A5, which we do with -ffixed-a5.
 
 When allocating memory for disk buffers, it should be possible to start at
 BufPtr and just move downwards from there. Should save having to re-adjust
@@ -35,15 +37,6 @@ Something of importance will be determining the amount of RAM in the system
 once we switch MMU modes. I actually don't have too much of a problem with
 the first versions being limited to 8 megs, but when I break out the larger
 SIMMs I will want them to work.
-
-One thing that might make variables easier to work with would be to set them
-up as pc-relative, not a5-relative. Then we can just statically allocate them
-and have things "just work"... (Okay, this _doesn't_ work, but we now
-statically allocate then in the text segment anyway. We just access them
-relative to %a6, which should have been the frame pointer, but whatever)
-
-The next step is probably to add code to select a root partition, and list
-the contents of the / directory on it.
 
 #
 # EOF

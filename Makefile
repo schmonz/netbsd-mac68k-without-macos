@@ -1,25 +1,34 @@
 #
-# Makefile for Macboot
+# Makefile for new macboot
 #
 
-CC=m68k-coff-gcc
-AS=m68k-coff-as
-LD=m68k-coff-ld
-RM=rm
+CC=gcc
+AS=as
+LD=ld
 
-LDFLAGS=-oformat binary
-RMFLAGS=-f
+HOST_CFLAGS=-Wall -O2
+CFLAGS=-Wall -O2 -ffixed-a5
+LDFLAGS=
+SFLAGS= -l
 
-TARGETS=test1.bin test2.bin test3.bin test4.bin test5.bin test6.bin mainapp.bin
+default: macboot
 
-MAINAPP_OBJS=bootsect.o mainapp.o resource.o graphics.o scsi.o parttable.o
+macboot: aout2bb boot.out
+	./aout2bb boot.out $@ || nm -u boot.out
 
-default: $(TARGETS)
+aout2bb: aout2bb.c chksum.c
+	$(CC) $(HOST_CFLAGS) -o $@ aout2bb.c chksum.c
 
-clean:
-	$(RM) $(RMFLAGS) *.o *~ *.bin
+boot.out: bbstart.o main.o resource.o
+	$(LD) $(LDFLAGS) -r -dc -e _start -o $@ $>
+	size $@
+	nm -u $@
 
-.SUFFIXES: .o .s .bin .S
+.c.o: #txlt
+	$(CC) $(CFLAGS) -c $<
+#	$(CC) $(CFLAGS) -S $< -o $*.s
+#	./txlt < $*.s | $(AS) $(AFLAGS) -o $*.o
+#	rm $*.s
 
 .s.o:
 	$(AS) -o $@ $<
@@ -27,12 +36,13 @@ clean:
 .S.o:
 	$(CC) -c $<
 
-.o.bin:
-	$(LD) $(LDFLAGS) -o $@ $<
+# this txlt thing was a good idea, but it doesn't work when you need a pointer
+# to partway through the .bss segment.
+#txlt.c: txlt.l
+#	lex -otxlt.c txlt.l
 
-# special build rules
-mainapp.bin: $(MAINAPP_OBJS)
-	$(LD) $(LDFLAGS) -o mainapp.bin $(MAINAPP_OBJS)
+#txlt: txlt.c
+#	$(CC) $(CFLAGS) -o $@ txlt.c -ll
 
 #
 # EOF
