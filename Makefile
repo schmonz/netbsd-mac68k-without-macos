@@ -7,7 +7,7 @@ AS=as
 LD=ld
 
 HOST_CFLAGS=-Wall -O2
-CFLAGS=-Wall -O2 -ffixed-a5
+CFLAGS=-Wall -O2 -ffixed-a5 -m68000
 LDFLAGS=
 SFLAGS= -l
 
@@ -19,7 +19,7 @@ macboot: aout2bb boot.out
 aout2bb: aout2bb.c chksum.c
 	$(CC) $(HOST_CFLAGS) -o $@ aout2bb.c chksum.c
 
-boot.out: bbstart.o main.o resource.o
+boot.out: bbstart.o main.o resource.o keyboard.o
 	$(LD) $(LDFLAGS) -r -dc -e _start -o $@ $>
 	size $@
 	nm -u $@
@@ -36,13 +36,10 @@ boot.out: bbstart.o main.o resource.o
 .S.o:
 	$(CC) -c $<
 
-# this txlt thing was a good idea, but it doesn't work when you need a pointer
-# to partway through the .bss segment.
-#txlt.c: txlt.l
-#	lex -otxlt.c txlt.l
-
-#txlt: txlt.c
-#	$(CC) $(CFLAGS) -o $@ txlt.c -ll
+# libsa stuff
+S = /usr/src/sys
+SADST = libsa
+.include "$S/lib/libsa/Makefile.inc"
 
 #
 # EOF

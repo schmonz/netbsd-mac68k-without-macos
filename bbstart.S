@@ -268,6 +268,24 @@ Lendtab:
 Lerror:
 	_SysError
 
+|
+| The keyboard driver linkage (see keyboard.c)
+|
+	.globl _kb_driver_linkage
+_kb_driver_linkage:
+| I don't know what the reg preserve semantics are here, so I'm saving everything
+| "Preserve all registers other than a0-a3 and d0-d3"... Whatever, Ill fix it later.
+| Id also have to take the registers the compiler preserves into account...
+| FIXME: This assembler doesnt like having an odd number of apostrophes in comments,
+| which screws up too often.
+	moveml	a0-a6/d0-d7, a7@-
+	movel	d0, sp@-
+	movel	a0, sp@-
+	bsr	_kb_driver
+	addql	#8, sp
+	moveml	a7@+, a0-a6/d0-d7
+	rts
+
 /*
  * EOF
  */

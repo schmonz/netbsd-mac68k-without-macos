@@ -14,145 +14,7 @@ void init_resources(void);
  * experiments area
  */
 
-#define ASM_REGS_DESTROYED "a0", "a1", "d0", "d1", "d2"
-
-typedef unsigned char u8;
-typedef signed char s8;
-typedef unsigned short u16;
-typedef signed short s16;
-typedef unsigned long u32;
-typedef signed long s32;
-
-typedef struct Point Point;
-typedef struct Rect Rect;
-
-typedef struct Region Region;
-typedef Region *RgnPtr, **RgnHandle;
-
-typedef struct PenState PenState;
-
-typedef struct BitMap BitMap;
-
-typedef void *QDProcsPtr;
-typedef void *Ptr, **Handle;
-
-typedef struct Pattern Pattern, *PatPtr, **PatHandle;
-typedef const u8 *ConstPatternParam;
-
-typedef struct GrafPort GrafPort, *GrafPtr;
-
-typedef s32 Fixed;
-typedef u16 Style;
-
-struct qd_globs {
-    char reserved[202];
-    GrafPtr thePort;
-    GrafPtr *a5_target;
-};
-
-struct Point {
-    s16 v;
-    s16 h;
-};
-
-struct Rect {
-    s16 top;
-    s16 left;
-    s16 bottom;
-    s16 right;
-};
-
-struct BitMap {
-    Ptr baseAddr;
-    s16 rowBytes;
-    Rect bounds;
-};
-
-struct Pattern {
-    u8 pat[8];
-};
-
-struct PenState {
-    Point pnLoc;
-    Point pnSize;
-    s16 pnMode;
-    Pattern pnPat;
-};
-
-struct GrafPort {
-    s16 device;
-    BitMap portBits;
-    Rect portRect;
-    RgnHandle visRgn;
-    RgnHandle clipRgn;
-    Pattern bkPat;
-    Pattern fillPat;
-    PenState penState;
-    s16 pnVis;
-    s16 txFont;
-    Style txFace;
-    u8 filler;
-    s16 txMode;
-    s16 txSize;
-    Fixed spExtra;
-    s32 fgColor;
-    s32 bkColor;
-    s16 colrBit;
-    s16 patStretch;
-    Handle picSave;
-    Handle rgnSave;
-    Handle polySave;
-    QDProcsPtr grafProcs;
-};
-
-extern inline void EraseRect(Rect *r)
-{
-    asm("movel %0, sp@-; .word 0xa8a3": : "a" (r): ASM_REGS_DESTROYED);
-}
-
-extern inline void FrameRect(Rect *r)
-{
-    asm("movel %0, sp@-; .word 0xa8a1": : "a" (r): ASM_REGS_DESTROYED);
-}
-
-extern inline void InitGraph(GrafPtr *port)
-{
-    asm("lea %0@(4), a5; movel %0, sp@-; .word 0xa86e": : "a"(port): ASM_REGS_DESTROYED);
-}
-
-extern inline void OpenPort(GrafPtr port)
-{
-    asm("movel %0, sp@-; .word 0xa86f": : "a"(port): ASM_REGS_DESTROYED);
-}
-
-extern inline void InitFonts(void)
-{
-    asm(".word 0xa8fe": : : ASM_REGS_DESTROYED);
-}
-
-extern inline void MoveTo(Point point)
-{
-    asm("movel %0, sp@-; .word 0xa893": : "m" (point): ASM_REGS_DESTROYED);
-}
-
-extern inline RgnHandle NewRgn(void)
-{
-    RgnHandle retval;
-
-    asm("subql #4, sp; .word 0xa8d8; movel sp@+, %0": "=g" (retval): : ASM_REGS_DESTROYED);
-
-    return retval;
-}
-
-extern inline void DrawChar(char acter)
-{
-    asm("movew %0, sp@-; .word 0xa883": : "g" (acter): ASM_REGS_DESTROYED);
-}
-
-extern inline void ScrollRect(Rect *rect, s16 h, s16 v, RgnHandle updateregion)
-{
-    asm("movel %0, sp@-; movew %1, sp@-; movew %2, sp@-; movel %3, sp@-; .word 0xa8ef": : "g" (rect), "g" (h), "g" (v), "g" (updateregion): ASM_REGS_DESTROYED);
-}
+#include "mactraps.h"
 
 struct qd_globs our_qd_globs;
 GrafPort our_grafport;
@@ -218,8 +80,6 @@ void init_graphics()
     our_region_handle = NewRgn();
 }
 
-typedef s16 OSErr;
-
 #define fsFromStart 1
 
 struct ParamBlockRec {
@@ -277,6 +137,7 @@ extern inline OSErr PBWrite(struct ParamBlockRec *paramblock)
 				    * misgivings about it.
 				    */
 
+#if 0
 /*
  * FIXME: I had to have this return the return from PBWrite to keep the
  * compiler from "optimizing" it out. If someone could tell me a better way?
@@ -306,6 +167,35 @@ int dump_rom(void)
 
     return i;
 }
+#endif
+
+u8 read_key(void)
+{
+    struct EventRecord event;
+
+    while (GetOSEvent(keyDownMask | autoKeyMask, &event))
+	; /* do nothing */
+
+    return event.message;
+}
+
+void emit_u8(u8 data)
+{
+    emit_char("0123456789abcdef"[data >> 4]);
+    emit_char("0123456789abcdef"[data & 15]);
+}
+
+void emit_u16(u16 data)
+{
+    emit_u8(data >> 8);
+    emit_u8(data);
+}
+
+void emit_u32(u32 data)
+{
+    emit_u16(data > 16);
+    emit_u16(data);
+}
 
 /*
  * m^Hpain function
@@ -317,15 +207,32 @@ void pain(void)
 
     init_graphics();
 
+/*      SysEvtMask = everyEvent; */
+/*      FlushEvents(everyEvent, 0); */
+
     emit_string("---===***< Startup >***===---\n");
 #if 0
     emit_string("Really really really long line to test the line wrapping "
 		"feature of emit_char(). ABCDEFGHIJKLMNOPQRSTUVWXYZ "
 		"abcdefghijklmnopqrstuvwxyz.\n");
 #endif
+    InitEvents(0x20);
+    SysEvtMask = keyDownMask | autoKeyMask;
+    FlushEvents(everyEvent, 0);
+    install_kb_driver();
+/*      InitCursor(); */
+/*      { u16 tmp; asm("movew sr, %0": "=g" (tmp)); emit_u16(tmp); emit_char('\n');} */
+/*      emit_u16(SysEvtMask); */
+/*      emit_char('\n'); */
 
-    dump_rom();
-    
+/*     dump_rom(); */
+
+    emit_string("> ");
+/*      while(1); */
+    while (1) {
+	emit_char(read_key());
+    }
+
     while(1);
 }
 
