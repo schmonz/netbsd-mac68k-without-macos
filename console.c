@@ -1,5 +1,5 @@
 /*
- * $Id$
+ * $Id: console.c 1.1 Sat, 05 Jan 2002 19:00:17 -0500 nyef $
  *
  * boot console
  */

@@ -194,6 +194,26 @@ extern inline OSErr SetADBInfo(struct ADBSetInfoBlock *info, ADBAddress ADBAddr)
     return retval;
 }
 
+/* File/Device Manager traps */
+
+extern inline OSErr PBRead(struct ParamBlockRec *paramblock)
+{
+    OSErr retval;
+
+    asm volatile("movel %1, a0; .word 0xa002; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
+
+    return retval;
+}
+
+extern inline OSErr PBWrite(struct ParamBlockRec *paramblock)
+{
+    OSErr retval;
+
+    asm volatile("movel %1, a0; .word 0xa003; movew d0, %0": "=g" (retval): "g" (paramblock): ASM_REGS_DESTROYED);
+
+    return retval;
+}
+
 #endif /* MACTRAPS_H */
 
 /* EOF */

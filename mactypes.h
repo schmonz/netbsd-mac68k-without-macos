@@ -164,6 +164,32 @@ struct ADBOpPB {
     void *data;
 };
 
+/* File/Device Manager types */
+
+#define fsFromStart 1
+
+struct ParamBlockRec {
+    void *qLink;
+    s16 qType;
+    s16 ioTrap;
+    void *ioCmdAddr;
+    void *ioCompletion;
+    OSErr ioResult;
+    char *ioNamePtr;
+    s16 ioVRefNum;
+
+    /* ioParam variant */
+    s16 ioRefNum;
+    s8 ioVersNum;
+    s8 ioPermssn;
+    void *ioMisc;
+    void *ioBuffer;
+    u32 ioReqCount;
+    u32 ioActCount;
+    s16 ioPosMode;
+    s32 ioPosOffset;
+} __attribute__ ((packed));
+
 #endif /* MACTYPES_H */
 
 /* EOF */

@@ -1,0 +1,165 @@
+NetBSD Macboot Notes                          Booter Requirements
+
+
+
+X.X  KERNEL ENVIRONMENT
+
+The initial kernel environment is a  fairly  typical  environment
+structure. It is a NUL-terminated list of NUL-terminated strings.
+That is, each string is followed by a '\0' character  except  for
+the last, which is followed by two '\0' characters.  Each  string
+is of the form "variable=value". The variables set by the  booter
+are:
+
+    /* video related values */
+
+    VIDEO_ADDR:   The base address of the video framebuffer.
+
+    ROW_BYTES:    The number of bytes in a row of  pixels  in
+                  the framebuffer.
+
+    SCREEN_DEPTH: The number of bits per pixel in the framebuffer.
+
+    DIMENSIONS:   The resolution of the framebuffer in pixels.
+                  "height = 31:16, width = 15:0."
+
+
+    /* basic system information */
+
+    MACHINEID:     Gestalt ID for machine type.
+
+    PROCESSOR:     Gestalt ID for processor type.
+
+    MEMSIZE:       RAM size in megabytes.
+
+    GRAYBARS:      Some sort of debugging flag?
+
+    SERIALECHO:    ??? (may as well set at 0)
+
+    SERIALCONSOLE: ??? (may as well set at 0)
+
+
+    /* serial port related values */
+
+    SERIAL_MODEM_FLAGS:
+
+    SERIAL_MODEM_HSKICLK:
+
+    SERIAL_MODEM_GPICLK:
+
+    SERIAL_MODEM_DSPEED:
+
+    SERIAL_PRINT_FLAGS:
+
+    SERIAL_PRINT_HSKICLK:
+
+    SERIAL_PRINT_GPICLK:
+
+    SERIAL_PRINT_DSPEED:
+
+
+    BOOTERVER:     The booter's major version number. Must be at
+                   least 111.
+
+
+    ROOT_SCSI_ID:  ??? (may as well set at 0)
+
+
+    /* something about "BOOTHOWTO", whatever that is */
+
+    BOOTHOWTO:   See sys/reboot.h, only RB_AUTOBOOT, RB_SINGLE,
+                 RB_ASKNAME and RB_KDB are used.
+
+    SINGLE_USER: Either RB_SINGLE or RB_AUTOBOOT. Used if
+                 BOOTHOWTO is RB_AUTOBOOT.
+
+
+    /* for kernel debugging */
+
+    END_SYM: address of end of kernel image.
+
+
+    /* time-related values */
+
+    BOOTTIME:
+
+    GMTBIAS:
+
+
+    /* values not used by kernel */
+
+    FLAGS:
+
+    MACOS_VIDEO:
+
+    MACOS_SCC:
+
+
+    /* "globals stolen from MacOS" */
+
+    ROMBASE:        ROMBase.
+
+    TIMEDBRA:       TimeDBRA.
+
+    ADBDELAY:       (undocumented), 16 bits at 0xcea.
+
+    HWCFGFLAGS:     HWCfgFlags.
+
+    HWCFGFLAG2:     (undocumented), 32 bits at 0xdd0.
+
+    HWCFGFLAG3:     (undocumented), 32 bits at 0xdd4.
+
+    ADBREINIT_JTBL: (undocumented), 32 bits at 0xdd8.
+
+    ADBINTERRUPT:   (not set by booter, but checked by kernel)
+
+
+X.X  KERNEL STARTUP
+
+The kernel is moved in memory to linear 0,  the CPU registers are
+not loaded with the "Secret BCDL White board codes !!!", and then
+the booter  jumps to the  kernel entry point to  finish  booting.
+The BCDL register values are shown below:
+
+    A2: Video depth (in pixels, presumably).
+
+    A3: Rowbytes  (the number  of bytes  between each row  of
+        pixels on the screen).
+
+    A4: Video resolution packed in bitfields as follows:
+
+        0-15:  Width.
+        16-31: Height.
+
+    A5: "Reserved for bus faults, core dumps, and dog shooting
+        NEVER EVER PUT STUFF in a5" (by the  time  the  kernel
+        starts, A5 is probably trashable, though).
+
+    D4: A collection of disparate data stored in bitfields as
+        follows:
+
+        0-1:  processor.
+        2-6:  machine.
+        7-11: ram amount in megs.
+        16:   serial boot.
+        17:   greybars  (note   that   this   is   called
+              "GRAYBARS" in the environment section).
+        18:   single user.
+
+    D5: Video address (the base address of the framebuffer).
+
+    D6: Boot drive and part. (what encoding?)
+
+For more fun, kernel 1.5.1 doesn't appear to  use  any  of  these
+except for A1 and D4, and there's a note  saying that most of  D4
+isn't used either (and a perusal of  locore.s and  machdep.c show
+that  the  parts of D4  that are used  aren't documented as  BCDL
+codes). The actual register values used are as follows:
+
+    A1: environment buffer.
+
+    D4: misc flags:
+
+        18: create bootdev using ROOT_SCSI_ID (?).
+        31: must be 1 (used to detect new-style booter)
+

@@ -45,39 +45,6 @@
 |
 
 #define _SysError		.word 0xa9c9
-#define _SetAppBase		.word 0xa057
-#define _NewPtr_Sys_Clear	.word 0xa71e
-#define _BlockMove		.word 0xa02e
-#define _Read			.word 0xa002
-
-|
-| IOParamBlock structure fields
-|
-
-ioVRefNum	=	22
-ioRefNum	=	24
-ioPosMode	=	44
-ioPosOffset	=	46
-ioBuffer	=	32
-ioReqCount	=	36
-
-|
-| DrvQEl structure fields
-|
-
-qLink		=	0
-dQDrive		=	6
-dQRefNum	=	8
-
-|
-| System Globals
-|
-
-SysZone		=	0x2a6	| System heap zone
-TheZone		=	0x118	| Current heap zone
-BootDrive	=	0x210	| Drive number of the startup volume
-DrvQHdr		=	0x308	| Drive Queue Header
-BtDskRfn	=	0xb34	| Refnum of boot disk driver (NOT from IM)
 
 |
 | The code proper
@@ -92,11 +59,8 @@ Lzero:
 	.word	0x4c4b		| boot signature
 	.globl _start
 _start:
-#if 1
-	bra	Lloadremainder
-#else
 	bra	Lrelocate
-#endif
+
 	.word	0x4418		| a version code of some sort
 	.word	0x0000		| Secondary sound and video buffer allocation
 				| (should always be 0, see retired TN DV 03)
@@ -113,109 +77,6 @@ Filesz:	.long 8192			| dummy
 Lreltab:
 	.word 0			| aout2bb puts the reloc table address here
 
-#if 1
-Lloadremainder:
-|
-| This code initializes a system heap (which will need resizing later), copies
-| itself into the start of a block allocated on the heap, sets up another block
-| for the stack, loads the next 7k up from the disk, and jumps to it.
-|
-
-|
-| First, set up the system heap
-|
-
-	moveal	SysZone, a0
-|	addal	#0x20000, a0	| 256k of heap... Hope its enough...
-	addal	#0x80000, a0    | ... it wasnt. I put it up to 512k, which is.
-	_SetAppBase
-	movel	SysZone, TheZone
-
-|
-| Next, allocate a block for us to use
-|
-
-	movel	#0x2000, d0
-	_NewPtr_Sys_Clear
-	tstw	d0
-	bmi	Lerror
-
-|
-| Move to our new location
-|
-
-	movel	a0, sp@-
-	movel	a0, a1
-	lea	pc@(Lzero), a0
-	movel	#0x400, d0
-	_BlockMove
-	movel	sp@+, a0
-| the linker emits a relocation fixup for this jmp, but fixups arent applied
-| yet. This is actually a good thing, since we want the unrelocated address.
-	jmp	a0@(Lnew_loc_target)
-
-Lnew_loc_target:
-
-|
-| Allocate a block for our stack
-|
-
-	movel	#0x4000, d0
-	_NewPtr_Sys_Clear
-	tstw	d0
-	bmi	Lerror
-	addl	#0x4000, a0
-	movel	a0, sp
-
-|
-| run through the drive queue looking for the entry for the boot drive. This
-| entry holds our driver reference number, which we need to pass to the read
-| call below. Note that this will break if BootDrive isnt in the drive queue.
-| (which is extremely unlikely, to say the least)
-|
-| NOTE: This didnt work, and I dont see why. However, 0xb34 supposedly is
-| an s16 containing the driver reference number for the boot drive, so we
-| can try using that instead.
-
-|	movel	#DrvQHdr, a1
-|	movew	BootDrive, a0
-|Ldqp_loop:
-|	cmpw	a1@(dQDrive), a0
-|	beqs	Ldqp_done
-|	movel	a1@(qLink), a1
-|	bras	Ldqp_loop
-|Ldqp_done:
-
-
-|
-| create an I/O parameter block on the stack and use it to read the next 7k
-| of data from the disk.
-|
-
-	movew	#25, d0
-Lclearloop:
-	clrw	sp@-
-	dbra	d0, Lclearloop
-	movel	sp, a0
-|	movew	#-5, a0@(ioRefNum)	| .Sony driver
-|	movew	a1@(dQRefNum), a0@(ioRefNum)| the driver for the boot drive
-	movew	BtDskRfn, a0@(ioRefNum)	| the driver for the boot drive (we hope)
-	movew	BootDrive, a0@(ioVRefNum)
-	movew	#1, a0@(ioPosMode)	| absolute positioning
-	movel	#0x400, a0@(ioPosOffset)| second block
-	movel	#0x1c00, a0@(ioReqCount)| 7k of data (just enough)
-	lea	pc@(Lzero + 0x400), a1
-	movel	a1, a0@(ioBuffer)	| read buffer address
-	_Read
-	addl	#50, sp			| clean up our mess
-	tstw	d0
-	bnes	Lerror			| and check for errors
-
-| disk read done, jmp to it
-
-	bra	Lrelocate
-
-#endif
 
 /*
  * Relocate ourselves, at the same time clearing the relocation table
@@ -257,7 +118,13 @@ Loopend:
 
 Lendtab:
 
-/* We are relocated. Now we call the main system */
+/* We are relocated. Now we set up the linkage to routines in stage 1 */
+
+	addql	#4, a7
+	movl	a7@+, L_putchar
+	movl	a7@+, L_emit_string
+	
+/* Linkage done, now call the main system */
 
 	bsr	_pain
 
@@ -265,27 +132,125 @@ Lendtab:
 | Our simple error handler
 |
 
-	movew	#0xdead, d0
+	movew	#0xb33f, d0
 Lerror:
 	_SysError
 
 |
-| The keyboard driver linkage (see keyboard.c)
+| linkage to routines in previous stage
 |
-	.globl _kb_driver_linkage
-_kb_driver_linkage:
-| I don't know what the reg preserve semantics are here, so I'm saving everything
-| "Preserve all registers other than a0-a3 and d0-d3"... Whatever, Ill fix it later.
-| Id also have to take the registers the compiler preserves into account...
-| FIXME: This assembler doesnt like having an odd number of apostrophes in comments,
-| which screws up too often.
-	moveml	a0-a6/d0-d7, a7@-
-	movel	d0, sp@-
-	movel	a0, sp@-
-	bsr	_kb_driver
-	addql	#8, sp
-	moveml	a7@+, a0-a6/d0-d7
+
+	.globl	_emit_string
+_emit_string:
+	movel	(L_emit_string), a7@-
 	rts
+L_emit_string:
+	.long	0
+
+	.globl	_putchar
+_putchar:
+	movel	(L_putchar), a7@-
+	rts
+L_putchar:
+	.long 0
+
+|
+| Final stage kernel startup
+|
+| Copy a small routine to just past the end of the environment buffer,
+| set up a couple variables for it, and jump to it.
+| This routine then relocates the kernel down to its final resting
+| place and jumps to its entry point, completing the job.
+|
+|    boot_kernel(marks[MARK_START], marks[MARK_ENTRY], envbuf, envbuf_head+1);
+#if 0
+	.globl	_boot_kernel
+_boot_kernel:
+	addl	#4, a7		| discard our return address (its in the way)
+
+	| SwapMMUMode to 32-bits
+	| FIXME: Check this against IM:V
+	movq	#1, d0
+|	_SwapMMUMode
+	.word	0xa05d
+
+	movw	sr, d0		| disable interrupts
+	oriw	#0x0700, d0
+	movw	d0, sr
+
+	movl	a7@+, a6	| start address
+	movl	a7@+, a0	| entry point
+	movl	a7@+, a1	| environment buffer
+	movl	a7@+, a2	| end of environment buffer
+
+	subl	a6, a0		| convert entry point to final value
+	subl	a6, a1		| convert environment pointer to final value
+
+	| copy final-stage jump to a safe place
+	| FIXME: should use long transfers, not byte transfers
+	movl	#Lcopiedcode, a3
+	movl	#Lcopiedend-Lcopiedcode, d0
+	movl	a2, a4
+Lcopy1:	movb	a3@+, a4@+
+	dbra	d0, Lcopy1
+
+	| jump to copied code
+	jmp	a2@
+
+Lcopiedcode:
+	| copy kernel to linear 0
+	| FIXME: should use long transfers, not byte transfers
+	subl	a6, a2
+	movl	a2, d0
+	movl	#0, a2
+Lcopy2:	movb	a6@+, a2@+
+	dbra	d0, Lcopy2
+
+	| fake flags and start the kernel
+	movl	#0x80000000, d4
+	jmp	a0@
+Lcopiedend:
+#else
+|	boot_kernel(marks[MARK_START],
+|		    (((long)boot_kernel) - marks[MARK_START]) >> 2,
+|		    marks[MARK_ENTRY] - marks[MARK_START],
+|		    envbuf - marks[MARK_START]);
+
+	.globl	_bootkern
+_bootkern:
+	addl	#4, a7		| discard our return address (its in the way)
+
+	| SwapMMUMode to 32-bits
+	| FIXME: Check this against IM:V
+	movq	#1, d0
+|	_SwapMMUMode
+	.word	0xa05d
+
+	movw	sr, d0		| disable interrupts
+	oriw	#0x0700, d0
+	movw	d0, sr
+
+	movl	a7@+, a6	| start address
+	movl	a7@+, d0	| length
+	movl	a7@+, a0	| entry point
+	movl	a7@+, a1	| environment buffer
+
+	movl	#0, a4
+Lcopy1:	movl	a6@+, a4@+
+	dbra	d0, Lcopy1
+
+	| kill the CPU caches
+	movl	#0x808, d0	| '030 D and I cache clear and disable
+	movc	d0, cacr
+
+	| fake flags and start the kernel
+	movl	#0x80000000, d4
+	jmp	a0@
+
+	.globl	_bootkern_end
+_bootkern_end:
+
+#endif
 
 /*
  * EOF
