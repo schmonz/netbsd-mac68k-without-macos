@@ -40,6 +40,18 @@ void dump_environment(void)
     }
 }
 
+void _rtt(void)
+{
+    for (;;);
+}
+
+int getchar(void)
+{
+    /* FIXME: Eject the disk here. */
+
+    return 0;
+}
+
 void pain(void)
 {
     u_long marks[MARK_MAX];
@@ -55,12 +67,13 @@ void pain(void)
      * hardly likely at this point.
      */
     marks[MARK_START] = ApplZone;
+#if 1
     if (loadfile("netbsd.gz", marks,
 		 LOAD_TEXT|LOAD_TEXTA|LOAD_DATA|LOAD_BSS|LOAD_SYM) == -1) {
 	printf("kernel load failure.\n");
 	while(1);
     }
-
+#endif
     printf("initializing environment buffer...\n");
 
     init_envbuf((marks[MARK_END] + 7) & ~3);
@@ -72,7 +85,7 @@ void pain(void)
     setenv("SCREEN_DEPTH", 1);
     setenv("DIMENSIONS", 512 | (342 << 16));
 
-    setenv("MACHINE_ID", 9);
+    setenv("MACHINEID", 9);
     setenv("PROCESSOR", 1);
     setenv("MEMSIZE", 8);
     setenv("BOOTERVER", 111);
@@ -85,14 +98,16 @@ void pain(void)
     setenv("HWCFGFLAG3", *((u32 *)0xdd4));
     setenv("ADBREINIT_JTBL", *((u32 *)0xdd8));
 
-    setenv("END_SYM", marks[MARK_END] - marks[MARK_START]);
+    setenv("END_SYM", (marks[MARK_END] - marks[MARK_START]) & 0x00ffffff);
+    setenv("MARK_SYM", (marks[MARK_SYM] - marks[MARK_START]) & 0x00ffffff);
+    setenv("GRAYBARS", 1);
 
 #if 0
     printf("marks:\n  START: %p\n  ENTRY: %p\n  NSYM: %ld\n  END: %p\n",
 	   marks[MARK_START], marks[MARK_ENTRY],
 	   marks[MARK_NSYM], marks[MARK_END]);
     dump_environment();
-#endif
+#else
     {
 	extern void bootkern;
 	extern void bootkern_end;
@@ -101,11 +116,12 @@ void pain(void)
 	boot_kernel = (((long)envbuf_head) + 5) & ~3;
 	bcopy(&bootkern, boot_kernel, &bootkern_end - &bootkern);
 	boot_kernel(marks[MARK_START],
-		    (((long)boot_kernel) - marks[MARK_START]) >> 2,
+		    ((long)boot_kernel) - marks[MARK_START],
 		    marks[MARK_ENTRY] - marks[MARK_START],
 		    envbuf - marks[MARK_START]);
     }
 /*     boot_kernel(marks[MARK_START], marks[MARK_ENTRY], envbuf, envbuf_head+1); */
+#endif
     
     while(1);
 }

@@ -230,17 +230,41 @@ _bootkern:
 	oriw	#0x0700, d0
 	movw	d0, sr
 
+#if 0
+	| test to see if we hit the video memory correctly
+	movl	#0xfe008040, a0
+	movl	#0xffff0000, a0@+
+	movl	#0xffff0000, a0@+
+	movl	#0xffff0000, a0@+
+	movl	#0xffff0000, a0@+
+#endif
+
 	movl	a7@+, a6	| start address
 	movl	a7@+, d0	| length
 	movl	a7@+, a0	| entry point
 	movl	a7@+, a1	| environment buffer
 
-	movl	#0, a4
-Lcopy1:	movl	a6@+, a4@+
-	dbra	d0, Lcopy1
+        movl    #0x00ffffff, d2
+        movl    a6, d4
+        andl    d2, d4
+        movl    d4, a6
+        movl    a0, d4
+        andl    d2, d4
+        movl    d4, a0
+        movl    a1, d4
+        andl    d2, d4
+        movl    d4, a1
+        andl    d2, d0
 
-	| kill the CPU caches
-	movl	#0x808, d0	| '030 D and I cache clear and disable
+	movl	#0, a4
+	movl	d0, d1
+	lsrl	#8, d1
+	lsrl	#8, d1
+Lcopy1:	movb	a6@+, a4@+
+	dbra	d0, Lcopy1
+	dbra	d1, Lcopy1
+
+	movl	#0x808, d0
 	movc	d0, cacr
 
 	| fake flags and start the kernel

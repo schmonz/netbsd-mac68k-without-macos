@@ -5,8 +5,9 @@
  */
 
 #include "stand.h"
-
+#include "mactypes.h"
 #include "mactraps.h"
+#include "macglobs.h"
 
 /*
  * experiments area
@@ -72,13 +73,18 @@ void cat_file(char *filename)
 
 void load_stage_2(void)
 {
+#if 0
     int fd;
     int size;
+#else
+    struct ParamBlockRec paramblock;
+#endif
     void *buffer;
     void (*start)(void *, void *);
 
     /* FIXME: More error checking */
     
+#if 0
     fd = oopen("stage2", 0);
     if (fd < 0) {
 	emit_string("stage2 not found.\n");
@@ -92,6 +98,17 @@ void load_stage_2(void)
     oread(fd, buffer, size);
     oclose(fd);
     start = buffer + 2;
+#else
+    buffer = alloc(32768);
+    paramblock.ioVRefNum = BootDrive;
+    paramblock.ioRefNum = BtDskRfn;
+    paramblock.ioReqCount = 32768;
+    paramblock.ioPosMode = fsFromStart;
+    paramblock.ioPosOffset = 8192 + 512;
+    paramblock.ioBuffer = buffer;
+    PBRead(&paramblock);
+    start = buffer + 2;
+#endif
 
     /* FIXME: make the linkage interface cleaner */
     start(putchar, emit_string);
