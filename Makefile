@@ -12,7 +12,7 @@ RMFLAGS=-f
 
 TARGETS=test1.bin test2.bin test3.bin test4.bin test5.bin test6.bin mainapp.bin
 
-MAINAPP_OBJS=bootsect.o mainapp.o resource.o graphics.o
+MAINAPP_OBJS=bootsect.o mainapp.o resource.o graphics.o scsi.o parttable.o
 
 default: $(TARGETS)
 

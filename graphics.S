@@ -9,6 +9,31 @@
 #include "appglobs.h"
 
 |
+| Variables local to this module
+|
+
+#define ourGrafPort localGrafPort(%a6)
+#define ourLineWrapPosition localLineWrapPosition(%a6)
+#define ourScrollRect localScrollRect(%a6)
+#define ourRegionHandle localRegionHandle(%a6)
+#define ourNewlinePoint localNewlinePoint(%a6)
+
+localGrafPort:
+	.space	sizeGrafPort
+
+localScrollRect:
+	.space	sizeRect
+
+localNewlinePoint:
+	.space	sizePoint
+
+localLineWrapPosition:
+	.word	0
+
+localRegionHandle:
+	.long	0
+
+|
 | Initialize QD and play with it
 |
 
@@ -68,7 +93,7 @@ init_graphics:
 	subiw	#14, %d0
 	movew	%d0, ourLineWrapPosition
 
-	addw	#12, top + ourScrollRect
+	addw	#10, top + ourScrollRect
 	addqw	#1, left + ourScrollRect
 	subqw	#1, bottom + ourScrollRect
 	subqw	#1, right + ourScrollRect
@@ -102,7 +127,7 @@ emit_string:
 	movel	%a1, %sp@-
 emit_string_loop:
 	moveb	%a0@+, %d0
-	beq	emit_string_done
+	beqs	emit_string_done
 	movel	%a0, %sp@-
 	bsrs	emit_char
 	movel	%sp@+, %a0
@@ -111,10 +136,31 @@ emit_string_loop:
 emit_string_done:
 	rts
 
+	.globl	emit_limited_string
+emit_limited_string:
+
+emit_limited_string_loop:
+	movel	%d0, %sp@-
+	moveb	%a0@+, %d0
+	beqs	emit_limited_string_cleanup
+	movel	%a0, %sp@-
+	bsrs	emit_char
+	movel	%sp@+, %a0
+	movel	%sp@+, %d0
+	dbra	%d0, emit_limited_string_loop
+
+emit_limited_string_done:
+	rts
+emit_limited_string_cleanup:
+	addql	#4, %sp
+	rts
+
 	.global	emit_char
 emit_char:
 	cmpib	#0x0a, %d0
 	beqs	emit_newline
+
+	movew	%d1, %sp@-
 
 	movew	ourLineWrapPosition, %d1
 	cmpw	left + pnLoc + ourGrafPort, %d1
@@ -126,6 +172,8 @@ emit_char:
 emit_char_dont_scroll:
 	movew	%d0, %sp@-
 	_DrawChar
+
+	movew	%sp@+, %d1
 
 	rts
 
@@ -161,6 +209,43 @@ emit_hex_nybble:
 
 hexchars:
 	.ascii	"0123456789abcdef"
+
+	.globl	dump_sector
+dump_sector:
+	movel	%a4, %sp@-
+	movel	%a0, %a4
+
+	clrw	%d0
+|	movew	#0x1f, %d2
+	movew	#0x0f, %d2
+
+dump_sector_loop:
+	movew	%d2, %sp@-
+	movew	%d0, %sp@-
+	bsr	emit_hex_word
+	moveb	#':', %d0
+	bsr	emit_char
+	moveb	#' ', %d0
+	bsr	emit_char
+
+	movew	#0x0f, %d1
+dump_sector_loop_2:
+	moveb	%a4@+, %d0
+	bsr	emit_hex_byte
+	moveb	#' ', %d0
+	bsr	emit_char
+	dbf	%d1, dump_sector_loop_2
+
+	moveb	#0x0a, %d0
+	bsr	emit_char
+
+	movew	%sp@+, %d0
+	addw	#0x10, %d0
+	movew	%sp@+, %d2
+	dbf	%d2, dump_sector_loop
+
+	movel	%sp@+, %a4
+	rts
 
 |
 | EOF

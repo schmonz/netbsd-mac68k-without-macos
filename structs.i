@@ -29,6 +29,12 @@ ioActCount	=	40
 ioPosMode	=	44
 ioPosOffset	=	46
 
+| cntrlParam variant:
+
+ioCRefNum	=	24
+csCode		=	26
+csParam		=	28
+
 |
 | GrafPorts (GrafPort)
 |
@@ -61,6 +67,14 @@ grafProcs	=	104
 sizeGrafPort	=	108
 
 |
+| Points (Point)
+|
+
+v		=	0
+h		=	2
+sizePoint	=	4
+
+|
 | Rectangles (Rect)
 |
 
@@ -69,6 +83,34 @@ left	=	2
 bottom	=	4
 right	=	6
 sizeRect=	8
+
+|
+| SCSI Instructions (SCSIInstr)
+|
+
+scOpcode	=	0
+scParam1	=	2
+scParam2	=	6
+sizeSCSIInstr	=	10
+
+| constants for SCSIInstr.scOpcode
+scInc	=	1
+scStop	=	7
+
+|
+| Partition Map Entries (???)
+|
+
+pmSig		=	0
+pmSigPad	=	2
+pmMapBlkCount	=	4
+pmPyPartStart	=	8
+pmPartBlkCnt	=	12
+pmPartName	=	16
+pmPartType	=	48
+pmLgDataStart	=	80
+pmDataCnt	=	84
+| There's more, but I couldnt be bothered typing it in right now
 
 |
 | EOF

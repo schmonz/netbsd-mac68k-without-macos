@@ -16,11 +16,13 @@ After some preliminary exploration with gcc, I decided that I couldn't trust
 it. Therefore, all these tests and any apps I write will be in ASM. If anyone
 else figures out how to get it to behave, I'll consider working with it.
 
-There's also something here called "mainapp". Right now it basically consists
-of some routines for a text output box. It could be turned into a booter for
-NetBSD with a bit of work (which was the idea I had when I wrote it).
-Unfortunately, I have lost enthusiasm for this project for now. If nobody else
-does, I'll probably pick it up again in a bit and do more work on it.
+There's also something here called "mainapp". Right now it consists of some
+routines for a text output box, and displays the names, types, sizes, and
+positions of all the partitions on SCSI 0. If SCSI 0 isn't a disk, or doesn't
+exist, or doesn't have a valid partition map, the behavior is undefined (that
+is, it'll almost definately break). It will also eject the disk from the
+internal drive once it finishes with the partition map (this saves me from
+having to reset the system to get the disk out).
 
 I see no reason to configure an application zone. QuickDraw can be set up on
 the stack, and I put the stack and the A5 world in the system heap.
@@ -36,7 +38,12 @@ SIMMs I will want them to work.
 
 One thing that might make variables easier to work with would be to set them
 up as pc-relative, not a5-relative. Then we can just statically allocate them
-and have things "just work"...
+and have things "just work"... (Okay, this _doesn't_ work, but we now
+statically allocate then in the text segment anyway. We just access them
+relative to %a6, which should have been the frame pointer, but whatever)
+
+The next step is probably to add code to select a root partition, and list
+the contents of the / directory on it.
 
 #
 # EOF

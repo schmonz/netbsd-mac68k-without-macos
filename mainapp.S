@@ -15,7 +15,7 @@ secondstage:
 | Set up our global variable space
 |
 
-	subl	#size_globs_above_a5, %sp
+	leal	blockstart(%pc), %a6
 	moval	%sp, %a5
 	subl	#size_globs_below_a5, %sp
 
@@ -27,6 +27,24 @@ secondstage:
 	bsr	init_graphics
 	bsr	show_greeting
 	bsr	system_check
+	bsr	parttable_init
+
+|
+| Eject the floppy disk (because its a pain to have to reset the system twice)
+|
+
+#if 1
+	movew	#25, %d0
+clearloop:
+	clrw	%sp@-
+	dbra	%d0, clearloop
+	movel	%sp, %a0
+	movew	#-5, %a0@(ioRefNum)	| .Sony driver
+	movew	BootDrive, %a0@(ioVRefNum)
+	movew	#7, %a0@(csCode)	| ejectCode
+	_Control
+	addl	#50, %sp		| clean up our mess
+#endif
 
 |
 | Since we have nothing better to do, loop infinitely

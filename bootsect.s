@@ -22,7 +22,7 @@
 |
 | The fifth word may also only be sacred to the original ROMs (see TN DV 03).
 |
-
+	.globl	blockstart
 blockstart:
 	.word	0x4c4b		;# boot signature
 	bra	start		;# branch to code start (would be 0x008c for
