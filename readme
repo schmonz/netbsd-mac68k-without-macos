@@ -1,0 +1,43 @@
+#
+# readme
+#
+# notes on the mac bootsector tests (a combined readme and todo list)
+#
+
+The tests are explorations of the startup environment of a mac, and as such
+are intended to be written to the start of a floppy disk. They have all been
+run on a IIcx, and notes have been made within each source file as to the
+expected behavior and, optionally, the conclusions drawn therefrom.
+
+To write a test to disk, use "dd if=test.bin of=/dev/fd0 conv=osync". The conv
+parameter is important.
+
+After some preliminary exploration with gcc, I decided that I couldn't trust
+it. Therefore, all these tests and any apps I write will be in ASM. If anyone
+else figures out how to get it to behave, I'll consider working with it.
+
+There's also something here called "mainapp". Right now it basically consists
+of some routines for a text output box. It could be turned into a booter for
+NetBSD with a bit of work (which was the idea I had when I wrote it).
+Unfortunately, I have lost enthusiasm for this project for now. If nobody else
+does, I'll probably pick it up again in a bit and do more work on it.
+
+I see no reason to configure an application zone. QuickDraw can be set up on
+the stack, and I put the stack and the A5 world in the system heap.
+
+When allocating memory for disk buffers, it should be possible to start at
+BufPtr and just move downwards from there. Should save having to re-adjust
+the heap sizes.
+
+Something of importance will be determining the amount of RAM in the system
+once we switch MMU modes. I actually don't have too much of a problem with
+the first versions being limited to 8 megs, but when I break out the larger
+SIMMs I will want them to work.
+
+One thing that might make variables easier to work with would be to set them
+up as pc-relative, not a5-relative. Then we can just statically allocate them
+and have things "just work"...
+
+#
+# EOF
+#
